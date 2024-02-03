@@ -41,3 +41,68 @@ which loads nvidia user settings from `~/.nvidia-settings-rc`, starts `sunshine`
 ```sh
 # If not running zsh:
 mv .zprofile ~/.bash_profile
+```
+
+## Steam Big Picture NVIDIA (Stuttering/Laggy) Fix:
+[Original comment in Issue #8918](https://github.com/ValveSoftware/steam-for-linux/issues/8918#issuecomment-1574456384)
+
+Modify `~/.local/share/Steam/ubuntu12_64/steam-runtime-heavy/run.sh`  
+Replace last `exec "$@"` with:
+```sh
+export XDG_CONFIG_HOME="$HOME/.config"
+# Not steamwebhelper so skip
+if [[ "$1" != *steamwebhelper* ]]; then
+  exec "$@"
+  exit
+fi
+
+args=()
+
+# Read blocklist from ~/.config/steam-flag-blocklist.conf
+blocklisted_flags=()
+while read flag; do
+    blocklisted_flags+=("$flag")
+done < "$XDG_CONFIG_HOME/steam-flags-blocklist.conf"
+
+# Filter arguments using the blocklist
+for arg in "$@"; do
+  include_arg=true
+
+  for blocklisted_flag in "${blocklisted_flags[@]}"; do
+    if [[ "$arg" == "$blocklisted_flag" ]]; then
+      include_arg=false
+    fi
+  done
+
+  if $include_arg; then
+    args+=("$arg")
+  fi
+done
+
+# Add additional flags from ~/.config/steam-flags.conf
+while read flag; do
+    args+=("$flag")
+done < "$XDG_CONFIG_HOME/steam-flags.conf"
+
+# Execute
+echo "${args[@]}" >> /tmp/steam-args
+exec "${args[@]}"
+```
+
+Then create two configuration files: `~/.config/steam-flags-blocklist.conf` and `~/.config/steam-flags.conf`:
+```sh
+cat <<EOF >>~/.config/steam-flags-blocklist.conf
+--disable-gpu
+--disable-gpu-compositing
+--use-angle=gl
+--disable-smooth-scrolling
+EOF
+cat <<EOF >>~/.config/steam-flags.conf
+--ignore-gpu-blocklist
+--disable-frame-rate-limit
+--enable-gpu-rasterization
+--enable-features=VaapiVideoDecoder
+--use-gl=desktop
+--enable-zero-copy
+EOF
+```
